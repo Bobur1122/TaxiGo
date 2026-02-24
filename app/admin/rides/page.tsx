@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-import Link from 'next/link'
 import { getAllRides, type RideRange } from '@/lib/actions/rides'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -87,9 +86,9 @@ export default async function AdminRidesPage({ searchParams }: Props) {
           Qo'llash
         </button>
         {(from || to) && (
-          <Link href="/admin/rides" className="text-sm text-primary underline underline-offset-4">
-            Clear
-          </Link>
+          <a href="/admin/rides" className="text-sm text-primary underline underline-offset-4">
+            Tozalash
+          </a>
         )}
       </form>
 

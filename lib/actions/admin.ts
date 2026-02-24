@@ -144,6 +144,7 @@ export async function getRideTrends(days = 7) {
   const { data, error } = await supabase
     .from('rides')
     .select('created_at, fare_final, status')
+    .eq('status', 'completed')
     .gte('created_at', since.toISOString())
     .order('created_at', { ascending: true })
 
