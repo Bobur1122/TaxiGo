@@ -266,6 +266,12 @@ export async function setRideFare(rideId: string, fareFinal: number) {
 
 export type RideRange = 'all' | 'day' | 'week' | 'month' | 'year'
 
+type RangeOption = {
+  range?: RideRange
+  from?: string | null
+  to?: string | null
+}
+
 function getRangeStart(range: RideRange) {
   const now = new Date()
   switch (range) {
@@ -292,7 +298,8 @@ function getRangeStart(range: RideRange) {
 
 export async function getAllRides(
   limit = 100,
-  range: RideRange = 'all',
+  range: RangeOption['range'] = 'all',
+  options: RangeOption = {},
 ) {
   const supabase =
     process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -306,9 +313,11 @@ export async function getAllRides(
     .order('created_at', { ascending: false })
     .limit(limit)
 
-  const start = getRangeStart(range)
-  if (start) {
-    query = query.gte('created_at', start.toISOString())
+  const start = options.from ? new Date(options.from) : getRangeStart(range)
+  if (start) query = query.gte('created_at', start.toISOString())
+  if (options.to) {
+    const end = new Date(options.to)
+    query = query.lte('created_at', end.toISOString())
   }
 
   const { data, error } = await query

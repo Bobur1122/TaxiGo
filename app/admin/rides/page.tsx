@@ -9,7 +9,7 @@ import { formatUZS } from '@/lib/map-utils'
 import { getLocale, tServer } from '@/lib/i18n-server'
 
 type Props = {
-  searchParams?: { range?: RideRange }
+  searchParams?: { range?: RideRange; from?: string; to?: string }
 }
 
 const ranges: { key: RideRange; labelKey: string }[] = [
@@ -23,6 +23,8 @@ const ranges: { key: RideRange; labelKey: string }[] = [
 export default async function AdminRidesPage({ searchParams }: Props) {
   const rangeParam = searchParams?.range || 'all'
   const range = ranges.some((r) => r.key === rangeParam) ? rangeParam : 'all'
+  const from = searchParams?.from || ''
+  const to = searchParams?.to || ''
   const [
     tRides,
     tActive,
@@ -59,7 +61,7 @@ export default async function AdminRidesPage({ searchParams }: Props) {
     ...ranges.map((r) => tServer(r.labelKey)),
   ])
   const locale = await getLocale()
-  const rides = await getAllRides(500, range)
+  const rides = await getAllRides(500, range, { from: from || undefined, to: to || undefined })
 
   const completed = rides.filter(r => r.status === 'completed').length
   const cancelled = rides.filter(r => r.status === 'cancelled').length
@@ -92,6 +94,35 @@ export default async function AdminRidesPage({ searchParams }: Props) {
           )
         })}
       </div>
+      <form className="mb-4 flex flex-wrap items-center gap-2 text-sm" method="get">
+        <input type="hidden" name="range" value="all" />
+        <label className="text-muted-foreground">
+          From:
+          <input
+            name="from"
+            type="date"
+            defaultValue={from}
+            className="ml-2 rounded border px-2 py-1 text-sm"
+          />
+        </label>
+        <label className="text-muted-foreground">
+          To:
+          <input
+            name="to"
+            type="date"
+            defaultValue={to}
+            className="ml-2 rounded border px-2 py-1 text-sm"
+          />
+        </label>
+        <button type="submit" className="rounded border px-3 py-1 text-sm text-foreground hover:border-primary hover:text-primary">
+          Apply
+        </button>
+        {(from || to) && (
+          <Link href="/admin/rides" className="text-sm text-primary underline underline-offset-4">
+            Clear
+          </Link>
+        )}
+      </form>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>
