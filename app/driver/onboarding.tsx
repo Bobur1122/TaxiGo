@@ -19,6 +19,7 @@ type DriverOnboardingProps = {
 export default function DriverOnboarding({ initialProfile }: DriverOnboardingProps) {
   const { t } = useI18n()
   const router = useRouter()
+  const [fullName, setFullName] = useState(initialProfile?.profiles?.full_name || '')
   const [licenseNumber, setLicenseNumber] = useState(initialProfile?.license_number || '')
   const [vehicleModel, setVehicleModel] = useState(initialProfile?.vehicle_model || '')
   const [vehicleColor, setVehicleColor] = useState(initialProfile?.vehicle_color || '')
@@ -34,6 +35,9 @@ export default function DriverOnboarding({ initialProfile }: DriverOnboardingPro
     setIsSubmitting(true)
     setError(null)
     try {
+      if (!fullName.trim()) {
+        throw new Error(t('driver.validation.name'))
+      }
       if (!vehicleClass) {
         throw new Error(t('driver.validation.class'))
       }
@@ -44,6 +48,7 @@ export default function DriverOnboarding({ initialProfile }: DriverOnboardingPro
         throw new Error(t('driver.validation.experience'))
       }
       await createDriverProfile({
+        full_name: fullName.trim(),
         license_number: licenseNumber,
         vehicle_model: vehicleModel,
         vehicle_color: vehicleColor,
@@ -73,6 +78,15 @@ export default function DriverOnboarding({ initialProfile }: DriverOnboardingPro
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label>{t('profile.name')}</Label>
+                <Input
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder={t('driver.namePlaceholder') || 'Ism Familiya'}
+                />
+              </div>
               <div className="space-y-2">
                 <Label>{t('driver.license')}</Label>
                 <Input required value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} placeholder="AB 1234567" />

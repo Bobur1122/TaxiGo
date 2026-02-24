@@ -24,6 +24,7 @@ export async function getDriverProfile() {
 }
 
 export async function createDriverProfile(profile: {
+  full_name: string
   license_number: string
   vehicle_model: string
   vehicle_color: string
@@ -38,6 +39,28 @@ export async function createDriverProfile(profile: {
   } = await supabase.auth.getUser()
 
   if (!user) throw new Error('Not authenticated')
+
+  // Update driver's public profile name using service role if available to bypass RLS.
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const admin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    )
+    await admin.from('profiles').upsert({
+      id: user.id,
+      full_name: profile.full_name,
+      updated_at: new Date().toISOString(),
+      role: 'driver',
+    })
+  } else {
+    await supabase
+      .from('profiles')
+      .upsert({
+        id: user.id,
+        full_name: profile.full_name,
+        updated_at: new Date().toISOString(),
+      })
+  }
 
   const { data, error } = await supabase
     .from('driver_profiles')

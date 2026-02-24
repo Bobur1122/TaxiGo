@@ -7,6 +7,9 @@ export async function POST(request: Request) {
     if (!access_token) {
       return NextResponse.json({ error: 'Missing access token' }, { status: 401 })
     }
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json({ error: 'Service role key missing on server' }, { status: 500 })
+    }
 
     const anon = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,

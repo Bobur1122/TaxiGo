@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import type { PromoCode, DashboardStats, Profile } from '@/lib/types'
 
 export async function getDashboardStats(): Promise<DashboardStats> {
@@ -57,7 +58,13 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 }
 
 export async function getRiderSummaries() {
-  const supabase = await createClient()
+  const supabase =
+    process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        })
+      : await createClient()
+
   const { data: riders, error: ridersError } = await supabase
     .from('profiles')
     .select('*')
@@ -86,18 +93,14 @@ export async function getRiderSummaries() {
     }
   }
 
-  return (riders || [])
-    .map((rider) => {
-      const info = counts.get(rider.id)
-      return info
-        ? {
-            ...(rider as Profile),
-            ride_count: info.count,
-            last_ride_at: info.lastRideAt,
-          }
-        : null
-    })
-    .filter(Boolean) as Array<Profile & { ride_count: number; last_ride_at: string }>
+  return (riders || []).map((rider) => {
+    const info = counts.get(rider.id)
+    return {
+      ...(rider as Profile),
+      ride_count: info?.count || 0,
+      last_ride_at: info?.lastRideAt || null,
+    }
+  }) as Array<Profile & { ride_count: number; last_ride_at: string | null }>
 }
 
 export async function getRideTrends(days = 7) {

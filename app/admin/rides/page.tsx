@@ -1,10 +1,27 @@
-import { getAllRides } from '@/lib/actions/rides'
+export const dynamic = 'force-dynamic'
+
+import Link from 'next/link'
+import { getAllRides, type RideRange } from '@/lib/actions/rides'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { formatUZS } from '@/lib/map-utils'
 import { getLocale, tServer } from '@/lib/i18n-server'
 
-export default async function AdminRidesPage() {
+type Props = {
+  searchParams?: { range?: RideRange }
+}
+
+const ranges: { key: RideRange; labelKey: string }[] = [
+  { key: 'all', labelKey: 'admin.range.all' },
+  { key: 'day', labelKey: 'admin.range.day' },
+  { key: 'week', labelKey: 'admin.range.week' },
+  { key: 'month', labelKey: 'admin.range.month' },
+  { key: 'year', labelKey: 'admin.range.year' },
+]
+
+export default async function AdminRidesPage({ searchParams }: Props) {
+  const rangeParam = searchParams?.range || 'all'
+  const range = ranges.some((r) => r.key === rangeParam) ? rangeParam : 'all'
   const [
     tRides,
     tActive,
@@ -19,6 +36,8 @@ export default async function AdminRidesPage() {
     tDate,
     tNoRides,
     tKm,
+    tFilter,
+    ...rangeLabels
   ] = await Promise.all([
     tServer('admin.rides'),
     tServer('admin.active'),
@@ -33,9 +52,11 @@ export default async function AdminRidesPage() {
     tServer('admin.date'),
     tServer('admin.noRides'),
     tServer('book.km'),
+    tServer('admin.filterBy'),
+    ...ranges.map((r) => tServer(r.labelKey)),
   ])
   const locale = await getLocale()
-  const rides = await getAllRides(100)
+  const rides = await getAllRides(500, range)
 
   const completed = rides.filter(r => r.status === 'completed').length
   const cancelled = rides.filter(r => r.status === 'cancelled').length
@@ -44,6 +65,27 @@ export default async function AdminRidesPage() {
   return (
     <div className="p-4 lg:p-6">
       <h2 className="mb-4 text-lg font-semibold text-foreground">{tRides}</h2>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-muted-foreground">{tFilter}:</span>
+        {ranges.map((item, idx) => {
+          const label = rangeLabels[idx]
+          const isActive = range === item.key
+          return (
+            <Link
+              key={item.key}
+              href={`?range=${item.key}`}
+              className={`rounded-full border px-3 py-1 transition-colors ${
+                isActive
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-muted-foreground/30 text-foreground hover:border-primary/50 hover:text-primary'
+              }`}
+            >
+              {label}
+            </Link>
+          )
+        })}
+      </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>

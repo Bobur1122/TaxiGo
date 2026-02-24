@@ -54,6 +54,17 @@ interface RouteData {
   geometry: [number, number][]
 }
 
+const formatAddress = (data: any) => {
+  const addr = data?.address || {}
+  const parts = [
+    addr.road,
+    addr.house_number,
+    addr.neighbourhood,
+    addr.suburb || addr.village || addr.town || addr.city,
+  ].filter(Boolean)
+  return parts.length > 0 ? parts.join(', ') : data?.display_name
+}
+
 const tariffIcons: Record<string, React.ReactNode> = {
   economy: <Car className="h-5 w-5" />,
   comfort: <Zap className="h-5 w-5" />,
@@ -83,6 +94,7 @@ export default function BookRidePage() {
   const [promoStatus, setPromoStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
   const [promoInfo, setPromoInfo] = useState<PromoCode | null>(null)
   const [promoMessage, setPromoMessage] = useState('')
+  const bestAccuracyRef = useRef<number | null>(null)
 
   // Map state
   const [mapLoaded, setMapLoaded] = useState(false)
@@ -93,6 +105,7 @@ export default function BookRidePage() {
   const routeLineRef = useRef<unknown>(null)
   const LRef = useRef<typeof import('leaflet') | null>(null)
   const watchIdRef = useRef<number | null>(null)
+  const reverseAbortRef = useRef<AbortController | null>(null)
 
   const pickupTimeout = useRef<ReturnType<typeof setTimeout>>()
   const dropoffTimeout = useRef<ReturnType<typeof setTimeout>>()
@@ -190,10 +203,11 @@ export default function BookRidePage() {
       let address = `${lat.toFixed(5)}, ${lng.toFixed(5)}`
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=${locale}`
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&zoom=18&accept-language=${locale}`
         )
         const data = await res.json()
-        if (data.display_name) address = data.display_name
+        const formatted = formatAddress(data)
+        if (formatted) address = formatted
       } catch { /* ignore */ }
 
       if (selectingOnMap === 'pickup') {
@@ -280,75 +294,74 @@ export default function BookRidePage() {
   const getMyLocation = useCallback(() => {
     if (!navigator.geolocation) return
     setIsLocating(true)
+    bestAccuracyRef.current = null
+
+    // Clear previous watch
     if (watchIdRef.current != null) {
       navigator.geolocation.clearWatch(watchIdRef.current)
       watchIdRef.current = null
     }
 
-    let best: { lat: number; lng: number; accuracy: number } | null = null
-    const finish = async (pos: { lat: number; lng: number }) => {
+    let fixed = false
+    const finish = async (pos: { lat: number; lng: number }, accuracy?: number) => {
+      fixed = true
+      if (typeof accuracy === 'number') bestAccuracyRef.current = accuracy
       setSelectingOnMap(null)
       setPickupCoords(pos)
       const map = leafletMapRef.current as import('leaflet').Map | null
-      if (map) {
-        map.setView([pos.lat, pos.lng], 14, { animate: true })
-      }
+      if (map) map.setView([pos.lat, pos.lng], 14, { animate: true })
+
+      // Abort previous reverse geocode to avoid queueing
+      if (reverseAbortRef.current) reverseAbortRef.current.abort()
+      reverseAbortRef.current = new AbortController()
+
       let address = `${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}`
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.lat}&lon=${pos.lng}&addressdetails=1&accept-language=${locale}`
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.lat}&lon=${pos.lng}&addressdetails=1&zoom=18&accept-language=${locale}`,
+          { signal: reverseAbortRef.current.signal }
         )
         const data = await res.json()
-        if (data.display_name) address = data.display_name
+        const formatted = formatAddress(data)
+        if (formatted) address = formatted
       } catch { /* ignore */ }
       setPickupAddress(address)
       setIsLocating(false)
     }
 
-    const timeoutId = setTimeout(() => {
-      if (best) finish({ lat: best.lat, lng: best.lng })
-      else setIsLocating(false)
-      if (watchIdRef.current != null) {
-        navigator.geolocation.clearWatch(watchIdRef.current)
-        watchIdRef.current = null
-      }
-    }, 25000)
-
-    // Start with an immediate high-accuracy fix
+    // Fast coarse fix first (quicker on many devices)
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const { latitude, longitude, accuracy } = position.coords
-        best = { lat: latitude, lng: longitude, accuracy }
-        if (accuracy <= 25) {
-          clearTimeout(timeoutId)
-          finish({ lat: latitude, lng: longitude })
-          return
+        if (!fixed) {
+          finish({ lat: position.coords.latitude, lng: position.coords.longitude }, position.coords.accuracy)
         }
       },
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+      () => setIsLocating(false),
+      { enableHighAccuracy: false, maximumAge: 300000, timeout: 8000 }
     )
 
+    // Then start high-accuracy watch to improve location if available, but stop after first good fix.
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
         const { latitude, longitude, accuracy } = position.coords
-        if (!best || accuracy < best.accuracy) {
-          best = { lat: latitude, lng: longitude, accuracy }
+        const prevAcc = bestAccuracyRef.current ?? Infinity
+        const improved = accuracy < prevAcc - 10 // significant improvement
+        if (improved || (!fixed && accuracy <= 50)) {
+          finish({ lat: latitude, lng: longitude }, accuracy)
         }
+        // stop if good enough
         if (accuracy <= 25) {
-          clearTimeout(timeoutId)
           if (watchIdRef.current != null) {
             navigator.geolocation.clearWatch(watchIdRef.current)
             watchIdRef.current = null
           }
-          finish({ lat: latitude, lng: longitude })
+          return
         }
       },
       () => {
-        clearTimeout(timeoutId)
-        setIsLocating(false)
+        if (!fixed) setIsLocating(false)
       },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 25000 }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
     )
   }, [locale])
 
@@ -445,84 +458,87 @@ export default function BookRidePage() {
     return { finalFare, discountValue: cappedDiscount }
   }, [promoInfo])
 
-  useEffect(() => {
+  const handleApplyPromo = useCallback(async () => {
     const code = promoCode.trim().toUpperCase()
     if (!code) {
-      setPromoStatus('idle')
+      setPromoStatus('invalid')
       setPromoInfo(null)
-      setPromoMessage('')
+      setPromoMessage(t('promo.invalid'))
       return
     }
 
-    const timeout = setTimeout(async () => {
-      setPromoStatus('checking')
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('promo_codes')
-        .select('*')
-        .eq('code', code)
-        .eq('is_active', true)
-        .single()
+    setPromoCode(code)
+    setPromoStatus('checking')
 
-      if (error || !data) {
-        setPromoStatus('invalid')
-        setPromoInfo(null)
-        setPromoMessage(t('promo.invalid'))
-        return
-      }
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('promo_codes')
+      .select('*')
+      .eq('code', code)
+      .eq('is_active', true)
+      .single()
 
-      if (data.expires_at && new Date(data.expires_at) < new Date()) {
-        setPromoStatus('invalid')
-        setPromoInfo(null)
-        setPromoMessage(t('promo.expired'))
-        return
-      }
+    if (error || !data) {
+      setPromoStatus('invalid')
+      setPromoInfo(null)
+      setPromoMessage(t('promo.invalid'))
+      return
+    }
 
-      if (data.max_uses && data.current_uses >= data.max_uses) {
-        setPromoStatus('invalid')
-        setPromoInfo(null)
-        setPromoMessage(t('promo.maxed'))
-        return
-      }
+    if (data.expires_at && new Date(data.expires_at) < new Date()) {
+      setPromoStatus('invalid')
+      setPromoInfo(null)
+      setPromoMessage(t('promo.expired'))
+      return
+    }
 
-      setPromoStatus('valid')
-      setPromoInfo(data)
-      setPromoMessage(t('promo.applied'))
-    }, 400)
+    if (data.max_uses && data.current_uses >= data.max_uses) {
+      setPromoStatus('invalid')
+      setPromoInfo(null)
+      setPromoMessage(t('promo.maxed'))
+      return
+    }
 
-    return () => clearTimeout(timeout)
+    setPromoStatus('valid')
+    setPromoInfo(data)
+    setPromoMessage(t('promo.applied'))
   }, [promoCode, t])
 
   const handleOrder = async () => {
     if (!pickupCoords || !dropoffCoords || !selectedTariff || !routeInfo) return
     setIsOrdering(true)
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/auth/login'); return }
-
       const fare = calculatePrice(selectedTariff, routeInfo)
       const { finalFare } = applyPromo(fare, selectedTariff.min_fare, selectedTariff.base_fare)
-      const { data, error } = await supabase.from('rides').insert({
-        customer_id: user.id,
-        pickup_address: pickupAddress,
-        dropoff_address: dropoffAddress,
-        pickup_lat: pickupCoords.lat,
-        pickup_lng: pickupCoords.lng,
-        dropoff_lat: dropoffCoords.lat,
-        dropoff_lng: dropoffCoords.lng,
-        status: 'pending',
-        fare_estimate: finalFare,
-        distance_km: routeInfo.distance,
-        duration_min: routeInfo.duration,
-        tariff_id: selectedTariff.id,
-        promo_code: promoInfo?.code || null,
-      }).select().single()
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) { router.push('/auth/login'); return }
 
-      if (error) throw error
-      if (data) router.push(`/customer/rides/${data.id}`)
+      const res = await fetch('/api/rides/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          access_token: session.access_token,
+          pickup_address: pickupAddress,
+          pickup_lat: pickupCoords.lat,
+          pickup_lng: pickupCoords.lng,
+          dropoff_address: dropoffAddress,
+          dropoff_lat: dropoffCoords.lat,
+          dropoff_lng: dropoffCoords.lng,
+          fare_estimate: finalFare,
+          distance_km: routeInfo.distance,
+          duration_min: routeInfo.duration,
+          tariff_id: selectedTariff.id,
+          promo_code: promoInfo?.code || null,
+        }),
+      })
+
+      const json = await res.json()
+      if (!res.ok) throw new Error(json?.error || 'Failed to create ride')
+      if (json.rideId) router.push(`/customer/rides/${json.rideId}`)
     } catch (err) {
       console.error('Order error:', err)
+      alert(err instanceof Error ? err.message : 'Buyurtma yaratilishda xato')
     } finally {
       setIsOrdering(false)
     }
@@ -690,7 +706,11 @@ export default function BookRidePage() {
               onChange={(e) => setPromoCode(e.target.value)}
               className="uppercase"
             />
-            <Button type="button" variant="outline" disabled={promoStatus === 'checking'} onClick={() => setPromoCode(promoCode.trim().toUpperCase())}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={promoStatus === 'checking'}
+              onClick={handleApplyPromo}>
               {promoStatus === 'checking' ? t('promo.checking') : t('promo.apply')}
             </Button>
           </div>

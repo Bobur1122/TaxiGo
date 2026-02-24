@@ -190,8 +190,6 @@ export default function LandingPage() {
             <Car className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">{t('app.name')} - {t('app.tagline')}</span>
           </div>
-          <p className="text-sm text-muted-foreground">{t('landing.stack')}</p>
-          
         </div>
       </footer>
     </div>

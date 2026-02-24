@@ -34,7 +34,9 @@ export default function AdminRidersClient({ riders }: { riders: RiderSummary[] }
                   <td className="py-3 text-foreground">{rider.full_name || t('admin.unnamed')}</td>
                   <td className="py-3 text-foreground">{rider.phone || '-'}</td>
                   <td className="py-3 text-foreground">{rider.ride_count}</td>
-                  <td className="py-3 text-foreground">{new Date(rider.last_ride_at).toLocaleDateString()}</td>
+                  <td className="py-3 text-foreground">
+                    {rider.last_ride_at ? new Date(rider.last_ride_at).toLocaleDateString() : '-'}
+                  </td>
                   <td className="py-3 text-right text-muted-foreground">{new Date(rider.created_at).toLocaleDateString()}</td>
                 </tr>
               ))}
