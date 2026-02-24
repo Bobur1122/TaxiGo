@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import type { PromoCode, DashboardStats, Profile } from '@/lib/types'
+import type { RideRange } from './rides'
 
 function getAdminClient() {
   if (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL) {
@@ -13,11 +14,39 @@ function getAdminClient() {
   return null
 }
 
-export async function getDashboardStats(): Promise<DashboardStats> {
+export async function getDashboardStats(range: RideRange = 'all'): Promise<DashboardStats> {
   const supabase = getAdminClient() || (await createClient())
 
+  const now = new Date()
+  let start: string | null = null
+  switch (range) {
+    case 'day':
+      now.setHours(0, 0, 0, 0)
+      start = now.toISOString()
+      break
+    case 'week':
+      now.setDate(now.getDate() - 7)
+      start = now.toISOString()
+      break
+    case 'month':
+      now.setMonth(now.getMonth() - 1)
+      start = now.toISOString()
+      break
+    case 'year':
+      now.setFullYear(now.getFullYear() - 1)
+      start = now.toISOString()
+      break
+    default:
+      start = null
+  }
+
+  const ridesQuery = supabase
+    .from('rides')
+    .select('id, fare_final, fare_estimate, status, created_at')
+  if (start) ridesQuery.gte('created_at', start)
+
   const [ridesRes, driversRes, ridersRes] = await Promise.all([
-    supabase.from('rides').select('id, fare_final, status, created_at'),
+    ridesQuery,
     supabase.from('driver_profiles').select('id, is_online, status'),
     supabase.from('profiles').select('id').eq('role', 'customer'),
   ])
@@ -28,7 +57,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
   const completedRides = rides.filter((r) => r.status === 'completed')
   const totalRevenue = completedRides.reduce(
-    (sum, r) => sum + (r.fare_final || 0),
+    (sum, r) => sum + (r.fare_final || r.fare_estimate || 0),
     0,
   )
   const activeDrivers = drivers.filter((d) => d.is_online && d.status === 'approved').length
