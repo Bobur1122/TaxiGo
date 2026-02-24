@@ -13,8 +13,6 @@ type Props = {
 
 export default async function AdminRidesPage({ searchParams }: Props) {
   const range: RideRange = 'all'
-  const from = searchParams?.from || ''
-  const to = searchParams?.to || ''
   const [
     tRides,
     tActive,
@@ -26,7 +24,6 @@ export default async function AdminRidesPage({ searchParams }: Props) {
     tStatus,
     tDistance,
     tFare,
-    tRevenue,
     tDate,
     tNoRides,
     tKm,
@@ -42,55 +39,21 @@ export default async function AdminRidesPage({ searchParams }: Props) {
     tServer('admin.status'),
     tServer('book.distance'),
     tServer('admin.fare'),
-    tServer('admin.revenue'),
     tServer('admin.date'),
     tServer('admin.noRides'),
     tServer('book.km'),
     tServer('admin.filterBy'),
   ])
   const locale = await getLocale()
-  const rides = await getAllRides(500, range, { from: from || undefined, to: to || undefined })
+  const rides = await getAllRides(500, range)
 
   const completed = rides.filter(r => r.status === 'completed').length
   const cancelled = rides.filter(r => r.status === 'cancelled').length
   const active = rides.filter(r => ['pending', 'accepted', 'arriving', 'in_progress'].includes(r.status)).length
-  const completedRevenue = rides
-    .filter(r => r.status === 'completed')
-    .reduce((sum, r) => sum + (r.fare_final || r.fare_estimate || 0), 0)
 
   return (
     <div className="p-4 lg:p-6">
       <h2 className="mb-4 text-lg font-semibold text-foreground">{tRides}</h2>
-
-      <form className="mb-4 flex flex-wrap items-center gap-2 text-sm" method="get">
-        <input type="hidden" name="range" value="all" />
-        <label className="text-muted-foreground">
-          Boshlanish:
-          <input
-            name="from"
-            type="date"
-            defaultValue={from}
-            className="ml-2 rounded border px-2 py-1 text-sm"
-          />
-        </label>
-        <label className="text-muted-foreground">
-          Tugash:
-          <input
-            name="to"
-            type="date"
-            defaultValue={to}
-            className="ml-2 rounded border px-2 py-1 text-sm"
-          />
-        </label>
-        <button type="submit" className="rounded border px-3 py-1 text-sm text-foreground hover:border-primary hover:text-primary">
-          Qo'llash
-        </button>
-        {(from || to) && (
-          <a href="/admin/rides" className="text-sm text-primary underline underline-offset-4">
-            Tozalash
-          </a>
-        )}
-      </form>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>
@@ -109,12 +72,6 @@ export default async function AdminRidesPage({ searchParams }: Props) {
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-foreground">{cancelled}</p>
             <p className="text-xs text-muted-foreground">{tCancelled}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-foreground">{formatUZS(completedRevenue)}</p>
-            <p className="text-xs text-muted-foreground">{tRevenue}</p>
           </CardContent>
         </Card>
       </div>

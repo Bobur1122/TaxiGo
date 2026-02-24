@@ -143,7 +143,7 @@ export async function getRideTrends(days = 7) {
 
   const { data, error } = await supabase
     .from('rides')
-    .select('created_at, fare_final, status')
+    .select('created_at, fare_final, fare_estimate, status')
     .eq('status', 'completed')
     .gte('created_at', since.toISOString())
     .order('created_at', { ascending: true })
@@ -164,7 +164,8 @@ export async function getRideTrends(days = 7) {
     if (!current) continue
     current.rides += 1
     if (ride.status === 'completed') {
-      current.revenue += ride.fare_final || 0
+      const amount = ride.fare_final ?? ride.fare_estimate ?? 0
+      current.revenue += amount
     }
   }
 
