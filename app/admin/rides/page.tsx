@@ -12,17 +12,8 @@ type Props = {
   searchParams?: { range?: RideRange; from?: string; to?: string }
 }
 
-const ranges: { key: RideRange; labelKey: string }[] = [
-  { key: 'all', labelKey: 'admin.range.all' },
-  { key: 'day', labelKey: 'admin.range.day' },
-  { key: 'week', labelKey: 'admin.range.week' },
-  { key: 'month', labelKey: 'admin.range.month' },
-  { key: 'year', labelKey: 'admin.range.year' },
-]
-
 export default async function AdminRidesPage({ searchParams }: Props) {
-  const rangeParam = searchParams?.range || 'all'
-  const range = ranges.some((r) => r.key === rangeParam) ? rangeParam : 'all'
+  const range: RideRange = 'all'
   const from = searchParams?.from || ''
   const to = searchParams?.to || ''
   const [
@@ -41,7 +32,6 @@ export default async function AdminRidesPage({ searchParams }: Props) {
     tNoRides,
     tKm,
     tFilter,
-    ...rangeLabels
   ] = await Promise.all([
     tServer('admin.rides'),
     tServer('admin.active'),
@@ -58,7 +48,6 @@ export default async function AdminRidesPage({ searchParams }: Props) {
     tServer('admin.noRides'),
     tServer('book.km'),
     tServer('admin.filterBy'),
-    ...ranges.map((r) => tServer(r.labelKey)),
   ])
   const locale = await getLocale()
   const rides = await getAllRides(500, range, { from: from || undefined, to: to || undefined })
@@ -74,30 +63,10 @@ export default async function AdminRidesPage({ searchParams }: Props) {
     <div className="p-4 lg:p-6">
       <h2 className="mb-4 text-lg font-semibold text-foreground">{tRides}</h2>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-muted-foreground">{tFilter}:</span>
-        {ranges.map((item, idx) => {
-          const label = rangeLabels[idx]
-          const isActive = range === item.key
-          return (
-            <Link
-              key={item.key}
-              href={`/admin/rides?range=${item.key}`}
-              className={`rounded-full border px-3 py-1 transition-colors ${
-                isActive
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-muted-foreground/30 text-foreground hover:border-primary/50 hover:text-primary'
-              }`}
-            >
-              {label}
-            </Link>
-          )
-        })}
-      </div>
       <form className="mb-4 flex flex-wrap items-center gap-2 text-sm" method="get">
         <input type="hidden" name="range" value="all" />
         <label className="text-muted-foreground">
-          From:
+          Boshlanish:
           <input
             name="from"
             type="date"
@@ -106,7 +75,7 @@ export default async function AdminRidesPage({ searchParams }: Props) {
           />
         </label>
         <label className="text-muted-foreground">
-          To:
+          Tugash:
           <input
             name="to"
             type="date"
@@ -115,7 +84,7 @@ export default async function AdminRidesPage({ searchParams }: Props) {
           />
         </label>
         <button type="submit" className="rounded border px-3 py-1 text-sm text-foreground hover:border-primary hover:text-primary">
-          Apply
+          Qo'llash
         </button>
         {(from || to) && (
           <Link href="/admin/rides" className="text-sm text-primary underline underline-offset-4">
