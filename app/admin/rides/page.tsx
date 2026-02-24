@@ -1,5 +1,8 @@
 export const dynamic = 'force-dynamic'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 import Link from 'next/link'
 import { getAllRides, type RideRange } from '@/lib/actions/rides'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'

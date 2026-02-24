@@ -31,7 +31,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     (sum, r) => sum + (r.fare_final || 0),
     0,
   )
-  const activeDrivers = drivers.filter((d) => d.is_online).length
+  const activeDrivers = drivers.filter((d) => d.is_online && d.status === 'approved').length
   const pendingDrivers = drivers.filter((d) => d.status === 'pending').length
   const approvedDrivers = drivers.filter((d) => d.status === 'approved').length
 
