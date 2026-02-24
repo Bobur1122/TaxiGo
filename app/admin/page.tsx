@@ -3,6 +3,8 @@ import { getAllRides } from '@/lib/actions/rides'
 import AdminDashboardClient from './admin-dashboard-client'
 import { getLocale } from '@/lib/i18n-server'
 
+export const dynamic = 'force-dynamic'
+
 export default async function AdminDashboardPage() {
   const stats = await getDashboardStats()
   const recentRides = await getAllRides(10)

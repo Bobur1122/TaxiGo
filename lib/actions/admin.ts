@@ -4,8 +4,17 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import type { PromoCode, DashboardStats, Profile } from '@/lib/types'
 
+function getAdminClient() {
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    return createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  }
+  return null
+}
+
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const supabase = await createClient()
+  const supabase = getAdminClient() || (await createClient())
 
   const [ridesRes, driversRes, ridersRes] = await Promise.all([
     supabase.from('rides').select('id, fare_final, status, created_at'),
@@ -58,12 +67,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 }
 
 export async function getRiderSummaries() {
-  const supabase =
-    process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL
-      ? createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-          auth: { autoRefreshToken: false, persistSession: false },
-        })
-      : await createClient()
+  const supabase = getAdminClient() || (await createClient())
 
   const { data: riders, error: ridersError } = await supabase
     .from('profiles')
@@ -104,7 +108,7 @@ export async function getRiderSummaries() {
 }
 
 export async function getRideTrends(days = 7) {
-  const supabase = await createClient()
+  const supabase = getAdminClient() || (await createClient())
   const since = new Date()
   since.setDate(since.getDate() - (days - 1))
 
